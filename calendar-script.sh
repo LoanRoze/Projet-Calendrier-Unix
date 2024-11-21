@@ -3,7 +3,6 @@
 calendrier_eleve="calendar-json/program_778.json"
 calendrier_prof="calendar-json/teacher_3302.json"
 
-
 #Prend en parametre 1 : nom du fichier json
 #Prend en parametre 2 : année
 #Prend en parametre 3 : numéro de semaine
@@ -31,7 +30,7 @@ obtenir_dates_semaine() {
 }
 
 #Prend en parametre 1 : nom du fichier json
-#Prend en parametre 2 : date 
+#Prend en parametre 2 : date
 #Renvoie les infos sur les cours de la date mise en paramètre
 affichage_cours_date() {
     local fichier_json=$1
@@ -84,8 +83,8 @@ affichage_controles_a_venir() {
 #Prend en parametre 1 : un heure au format HHMM
 #Renvoie l'heure passée en parametre au format HHhMMm
 conversion_en_heures() {
-    local heure=$(( $1 / 100 ))
-    local minutes=$(( $1 % 100 ))
+    local heure=$(($1 / 100))
+    local minutes=$(($1 % 100))
 
     echo "${heure}h${minutes}m"
 }
@@ -101,19 +100,19 @@ conversion_date_semaine() {
 #Prend en parametre 1 : nom du fichier json
 #Prend en parametre 2 : l'heure de debut au format HHMM
 #Prend en parametre 3 : l'heure de fin au format HHMM
-#Renvoie la durée au format HHhMMm 
+#Renvoie la durée au format HHhMMm
 calculer_duree_periode() {
     local fichier_json=$1
     local heure_debut=$2
     local heure_fin=$3
 
     # Extraire les heures et minutes
-    if (( "$heure_debut" > "$heure_fin" )); then
+    if (("$heure_debut" > "$heure_fin")); then
         echo "Veuillez fournir une heure de début et une heure de fin valide"
         return 1
     fi
 
-    local duree_minutes=$(( heure_fin - heure_debut ))
+    local duree_minutes=$((heure_fin - heure_debut))
 
     echo $(conversion_en_heures $duree_minutes)
 }
@@ -143,29 +142,29 @@ duree_cours_journee() {
 
     while IFS= read -r ligne; do
         tableau_heures_debut+=("$ligne")
-    done <<< "$heures_debut"
+    done <<<"$heures_debut"
 
     while IFS= read -r ligne; do
         tableau_heures_fin+=("$ligne")
-    done <<< "$heures_fin"
+    done <<<"$heures_fin"
 
     local nombre_de_cours=${#tableau_heures_debut[*]}
     local total_heure_journee=0
 
-    for ((i=0; i<=nombre_de_cours-1; i++)); do
+    for ((i = 0; i <= nombre_de_cours - 1; i++)); do
         local heure_debut=${tableau_heures_debut[$i]//\"/}
         local heure_fin=${tableau_heures_fin[$i]//\"/}
-        local total_heure_cours=$(( heure_fin - heure_debut ))
+        local total_heure_cours=$((heure_fin - heure_debut))
         total_heure_journee=$((total_heure_journee + total_heure_cours))
     done
 
     echo $total_heure_journee
-    
+
 }
 
 #Prend en parametre 1 : nom du fichier json
-#Prend en parametre 2 : l'année 
-#Prend en paramètre 3 : la semaine. 
+#Prend en parametre 2 : l'année
+#Prend en paramètre 3 : la semaine.
 #Renvoie le nombre d'heure de cours de cette semaine
 #FONCTION UTILE POUR CONTROLE (ligne a enlever juste pour que tu te reperes)
 extraction_heure_cours_semaine() {
@@ -201,12 +200,105 @@ affichage_cours_module() {
 
 }
 
+#Prend en parametre 1 : une liste de créneaux au format (1000-1400) par exemple
+#Renvoie la liste de créneaux au format (1000-1100, 1100-1200, 1200-1300, 1300-1400)
+generer_heure_decoupees() {
+    local liste_creneaux="$1"
+    local debut=${liste_creneaux%-*}
+    local fin=${liste_creneaux#*-}
+    local heure_decoupee=()
+
+    while [ "$debut" -lt "$fin" ]; do
+        creneau_suivant=$((debut + 100))
+        if [ "$creneau_suivant" -gt "$fin" ]; then
+            creneau_suivant=$fin
+        fi
+        heure_decoupee+=("${debut}-${creneau_suivant}")
+        debut=$creneau_suivant
+    done
+
+    echo "${heure_decoupee[@]}"
+}
+
+#Prend en parametre 1 : un calendrier en json
+#Prend en parametre 2 : la date pour laquelle on veut les créneaux libres
+#Renvoie la liste de tous les créneaux libres pour la date donnée
+trouver_creneau_libre_jour() {
+    local calendrier_json="$1"
+    local date="$2"
+
+    creneaux=$(jq -r --arg date "$date" '
+    .rows[] | 
+    select(.srvTimeCrDateFrom | contains($date)) |
+    "\(.timeCrTimeFrom)-\(.timeCrTimeTo)"
+  ' "$calendrier_json")
+
+    creneaux="$(generer_heure_decoupees $creneaux)"
+
+    local tous_creneaux=("800-900" "900-1000" "1000-1100" "1100-1200" "1200-1300" "1300-1400" "1400-1500" "1500-1600" "1600-1700" "1700-1800" "1800-1900")
+    for creneau in "${tous_creneaux[@]}"; do
+        if [[ ! " ${creneaux[*]} " =~ " ${creneau} " ]]; then
+            creneaux_libres+=("$creneau")
+        fi
+    done
+    echo ${creneaux_libres[@]}
+}
+
+#Prend en parametre 1 : json du calendrier de l'eleve
+#Prend en parametre 2 : json du calendrier du prof
+#Prend en parametre 3 : date pour laquelle on cherche le créneau
+#Retourne les créneaux communs entre les deux emplois du temps pour la date choisie
+#FONCTION UTILE POUR CONTROLE (ligne a enlever juste pour que tu te reperes)
+trouver_creneau_communs_jour() {
+    local calendrier_eleve_json="$1"
+    local calendrier_prof_json="$2"
+    local date="$3"
+
+    local creneaux_libres_eleves=($(trouver_creneau_libre_jour $calendrier_eleve_json $date))
+    local creneaux_libres_prof=($(trouver_creneau_libre_jour $calendrier_prof_json $date))
+
+    for creneau_eleve in "${creneaux_libres_eleves[@]}"; do
+        for creneau_prof in "${creneaux_libres_prof[@]}"; do
+            if [[ "$creneau_eleve" == "$creneau_prof" ]]; then
+                creneaux_communs+=("$creneau_eleve")
+            fi
+        done
+    done
+
+    echo -e "$(formater_creneaux_communs "${creneaux_communs[@]}")"
+    
+}
+
+#Prend en parametre 1 : une liste de créneaux
+#Retourne un joli affichage des créneaux
+formater_creneaux_communs() {
+  local creneaux=("$@")
+  local resultat=""
+  local index=1
+
+  for creneau in "${creneaux[@]}"; do
+    local debut=$(echo "$creneau" | cut -d'-' -f1)
+    local fin=$(echo "$creneau" | cut -d'-' -f2)
+
+    local heure_debut=$((debut / 100))h
+    local heure_fin=$((fin / 100))h
+
+    resultat+="Créneau $index :\n- Début : $heure_debut\n- Fin : $heure_fin\n\n"
+    ((index++))
+  done
+
+  echo -e "$resultat"
+}
+
+
 
 #EXEMPLES D'UTILISATION
-affichage_cours_module $calendrier_eleve "théâtre"
+# affichage_cours_module $calendrier_eleve "théâtre"
 
-affichage_cours_semaine $calendrier_eleve 2024 47
+# affichage_cours_semaine $calendrier_eleve 2024 47
 
-affichage_controles_a_venir $calendrier_eleve
+# affichage_controles_a_venir $calendrier_eleve
 
-extraction_heure_cours_semaine $calendrier_eleve 2024 47
+# extraction_heure_cours_semaine $calendrier_eleve 2024 47
+
+# trouver_creneau_communs_jour $calendrier_eleve $calendrier_prof $1
