@@ -152,9 +152,23 @@ duree_cours_journee() {
     local total_heure_journee=0
 
     for ((i = 0; i <= nombre_de_cours - 1; i++)); do
-        local heure_debut=${tableau_heures_debut[$i]//\"/}
-        local heure_fin=${tableau_heures_fin[$i]//\"/}
-        local total_heure_cours=$((heure_fin - heure_debut))
+        local heure_debut=$((${tableau_heures_debut[$i]//\"/} / 100))
+        local minute_debut=$((${tableau_heures_debut[$i]//\"/} % 100))
+
+        local heure_fin=$((${tableau_heures_fin[$i]//\"/} / 100))
+        local minute_fin=$((${tableau_heures_fin[$i]//\"/} % 100))
+        # echo $(((heure_fin - heure_debut) + (minute_fin - minute_debut)))
+        local total_heures=$((heure_fin - heure_debut))
+        local total_minute=$((minute_fin - minute_debut))
+        if ((total_minute < 0)); then
+            total_minute=$((total_minute + 60))
+            total_heures=$((total_heures - 1))
+        fi
+        if ((total_minute >= 60)); then
+            total_minute=$((total_minute - 60))
+            total_heures=$((total_heures + 1))
+        fi
+        local total_heure_cours=$(printf "%d%02d" $total_heures $total_minute)
         total_heure_journee=$((total_heure_journee + total_heure_cours))
     done
 
@@ -171,12 +185,17 @@ extraction_heure_cours_semaine() {
     local fichier_json=$1
     local liste_jours=$(obtenir_dates_semaine $fichier_json "$2" "$3")
 
-    local total_hours=0
+    local total_time=0
     for jour in $liste_jours; do
         duree_cours_jour=$(duree_cours_journee $fichier_json $jour)
-        total_hours=$((total_hours + duree_cours_jour))
+        echo $total_time
+        total_time=$((total_time + duree_cours_jour))
+        if (( total_time % 100 > 60 )); then
+            total_time=$((total_time + 40)) 
+        fi
+
     done
-    conversion_en_heures $total_hours
+    conversion_en_heures $total_time
 }
 
 #Prend en parametre 1 : nom du fichier json
@@ -266,43 +285,43 @@ trouver_creneau_communs_jour() {
     done
 
     echo -e "$(formater_creneaux_communs "${creneaux_communs[@]}")"
-    
+
 }
 
 #Prend en parametre 1 : une liste de créneaux
 #Retourne un joli affichage des créneaux
 formater_creneaux_communs() {
-  local creneaux=("$@")
-  local resultat=""
-  local index=1
+    local creneaux=("$@")
+    local resultat=""
+    local index=1
 
-  for creneau in "${creneaux[@]}"; do
-    local debut=$(echo "$creneau" | cut -d'-' -f1)
-    local fin=$(echo "$creneau" | cut -d'-' -f2)
+    for creneau in "${creneaux[@]}"; do
+        local debut=$(echo "$creneau" | cut -d'-' -f1)
+        local fin=$(echo "$creneau" | cut -d'-' -f2)
 
-    local heure_debut=$((debut / 100))h
-    local heure_fin=$((fin / 100))h
+        local heure_debut=$((debut / 100))h
+        local heure_fin=$((fin / 100))h
 
-    resultat+="Créneau $index :\n- Début : $heure_debut\n- Fin : $heure_fin\n\n"
-    ((index++))
-  done
+        resultat+="Créneau $index :\n- Début : $heure_debut\n- Fin : $heure_fin\n\n"
+        ((index++))
+    done
 
-  echo -e "$resultat"
+    echo -e "$resultat"
 }
-
-
 
 #EXEMPLES D'UTILISATION
 # affichage_cours_module $calendrier_eleve "théâtre"
 
-# affichage_cours_semaine $calendrier_eleve 2024 47
+# affichage_cours_semaine $calendrier_eleve 2024 49
 
 # affichage_controles_a_venir $calendrier_eleve
 
-# extraction_heure_cours_semaine $calendrier_eleve 2024 47
+# extraction_heure_cours_semaine $calendrier_eleve 2024 $1
 
 # trouver_creneau_communs_jour $calendrier_eleve $calendrier_prof $1
 
+# duree_cours_journee $calendrier_eleve $1
+# affichage_cours_date $calendrier_eleve $1
 
 
 echo "Bienvenue! Êtes-vous un(e) professeur(e) ou un(e) étudiant(e)?"
