@@ -83,8 +83,8 @@ affichage_controles_a_venir() {
 #Prend en parametre 1 : un heure au format HHMM
 #Renvoie l'heure passée en parametre au format HHhMMm
 conversion_en_heures() {
-    local heure=$(($1 / 60))
-    local minutes=$(($1 % 60))
+    local heure=$(($1 / 100))
+    local minutes=$(($1 % 100))
 
     echo "${heure}h${minutes}m"
 }
@@ -381,7 +381,7 @@ else
     echo "2) Prochaines dates et heures d'un module"
     echo "3) Compter les nombres d'heures de cours par semaine"
     echo "4) Trouver un créneau libre en commun avec celui d'une classe"
-    read -p "Veuillez entrer 1,2 ou 3: " choice
+    read -p "Veuillez entrer 1,2,3 ou 4: " choice
     echo "-------------------------------------------------------------------"
     case $choice in
         1)
